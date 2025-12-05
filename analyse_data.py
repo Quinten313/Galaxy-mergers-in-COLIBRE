@@ -96,38 +96,58 @@ def plot_counts(ax, x, bins, x_min, x_max, log_bins = False, c='black', label=No
 
     ax.plot(bin_centers, count, label = label, c = c)
     ax.set_xlim(x_min, x_max)
-    
-# Calculates the binned mean of property y, along with its error and bin centers as a function of x
-def calc_mean(x, y, bins, x_min, x_max, log_bins):
+
+# Calculates the binned mean of property y, along with its bootstrapping error and bin centers as a function of x
+def calc_mean(x, y, bins, x_min, x_max, log_bins=False, N=1000):
     bin_edges, bin_centers = set_bins(bins, x_min, x_max, log_bins)
     
-    mean = binned_statistic(x=x, values=y, statistic = 'mean', bins=bin_edges)[0]
-    std = binned_statistic(x=x, values=y, bins=bin_edges, statistic='std')[0]
-    count = binned_statistic(x=x, values=y, bins=bin_edges, statistic='count')[0]
-
-    err = std/count**.5
-    return mean, err, bin_centers
+    mean, _, indices = binned_statistic(x=x, values=y, statistic = 'mean', bins=bin_edges)
+    
+    bootstrapping_error = []
+    for i in range(1, len(bin_edges)):
+        y_in_bin = y[indices == i]
+        if len(y_in_bin) < 2:
+            bootstrapping_error.append(np.nan)
+            continue
+        resamples = np.random.randint(0, len(y_in_bin), [N, len(y_in_bin)])
+        resampled_means = [np.mean(y_in_bin[resample]) for resample in resamples]
+        bootstrapping_error.append(np.std(resampled_means))
+    return mean, bootstrapping_error, bin_centers
 
 # Plot the binned mean of property y, along with its error as a function of x
-def plot_mean(ax, x, y, bins, x_min, x_max, log_bins = False, c='black', label=None):
-    mean, err, bin_centers = calc_mean(x, y, bins, x_min, x_max, log_bins)
+def plot_mean(ax, x, y, bins, x_min, x_max, log_bins=False, N=100, c='black', label=None):
+    mean, err, bin_centers = calc_mean(x, y, bins, x_min, x_max, log_bins, N)
 
     ax.plot(bin_centers, mean, label = label, c = c)
     ax.fill_between(bin_centers, mean-err, mean+err, alpha = .3, color = c)
     ax.set_xlim(x_min, x_max)
 
-# Calculates the ratio of 2 binned means of property y, along with its error and bin centers as a function of x
-def calc_mean_ratio(x, y_int, y_iso, bins, x_min, x_max, log_bins):
-    mean_int, err_int, bin_centers = calc_mean(x, y_int, bins, x_min, x_max, log_bins)
-    mean_iso, err_iso, _ = calc_mean(x, y_iso, bins, x_min, x_max, log_bins)
+# Calculates the ratio of 2 binned means of property y, along with its bootstrapping error and bin centers as a function of x
+def calc_mean_ratio(x, y_int, y_iso, bins, x_min, x_max, log_bins=False, N=100):
+    bin_edges, bin_centers = set_bins(bins, x_min, x_max, log_bins)
 
+    mean_int, _, indices = binned_statistic(x=x, values=y_int, statistic = 'mean', bins=bin_edges)
+    mean_iso, _, _ = binned_statistic(x=x, values=y_iso, statistic = 'mean', bins=bin_edges)
     ratio = mean_int / mean_iso
-    err_ratio = ((err_int/mean_iso)**2+(mean_int*err_iso/mean_iso**2)**2)**.5
-    return ratio, err_ratio, bin_centers
+    
+    bootstrapping_error = []
+    for i in range(1, len(bin_edges)):
+        y_int_in_bin = y_int[indices == i]
+        y_iso_in_bin = y_iso[indices == i]
+        if len(y_int_in_bin) < 2:
+            bootstrapping_error.append(np.nan)
+            continue
+        resamples = np.random.randint(0, len(y_int_in_bin), [N, len(y_int_in_bin)])
+        resampled_means_int = [np.mean(y_int_in_bin[resample]) for resample in resamples]
+        resampled_means_iso = [np.mean(y_iso_in_bin[resample]) for resample in resamples]
+        resampled_ratios = np.array(resampled_means_int) / np.array(resampled_means_iso)
+        bootstrapping_error.append(np.std(resampled_ratios))
+        
+    return ratio, bootstrapping_error, bin_centers
 
 # Plots the ratio of 2 binned means of property y, along with its error as a function of x
-def plot_mean_ratio(ax, x, y_int, y_iso, bins, x_min, x_max, log_bins = False, add_line=True, c='black', label=None, show_error=True):
-    ratio, err_ratio, bin_centers = calc_mean_ratio(x, y_int, y_iso, bins, x_min, x_max, log_bins)
+def plot_mean_ratio(ax, x, y_int, y_iso, bins, x_min, x_max, log_bins=False, N=100, add_line=True, c='black', label=None, show_error=True):
+    ratio, err_ratio, bin_centers = calc_mean_ratio(x, y_int, y_iso, bins, x_min, x_max, log_bins, N)
     
     ax.plot(bin_centers, ratio, label = label, c = c)
     if add_line:
@@ -137,7 +157,7 @@ def plot_mean_ratio(ax, x, y_int, y_iso, bins, x_min, x_max, log_bins = False, a
     ax.set_xlim(x_min, x_max)
 
 # Calculates the binned median of property y, along with its percentiles and bin centers as a function of x
-def calc_median(x, y, bins, x_min, x_max, log_bins):
+def calc_median(x, y, bins, x_min, x_max, log_bins=False):
     bin_edges, bin_centers = set_bins(bins, x_min, x_max, log_bins)
     
     median = binned_statistic(x=x, values=y, statistic = 'median', bins=bin_edges)[0]
@@ -147,7 +167,7 @@ def calc_median(x, y, bins, x_min, x_max, log_bins):
     return median, percentile16, percentile84, bin_centers
 
 # Plot the binned median of property y, along with its percentiles as a function of x
-def plot_median(ax, x, y, bins, x_min, x_max, log_bins = False, c='black', label=None):
+def plot_median(ax, x, y, bins, x_min, x_max, log_bins=False, c='black', label=None):
     median, percentile16, percentile84, bin_centers = calc_median(x, y, bins, x_min, x_max, log_bins)
 
     ax.plot(bin_centers, median, label = label, c = c)
@@ -166,7 +186,7 @@ def calc_median_ratio(x, y_int, y_iso, bins, x_min, x_max, log_bins):
     return ratio, bin_centers
 
 # Plots the ratio of 2 binned medians of property y as a function of x
-def plot_median_ratio(ax, x, y_int, y_iso, bins, x_min, x_max, log_bins = False, add_line=True, c='black', label=None):
+def plot_median_ratio(ax, x, y_int, y_iso, bins, x_min, x_max, log_bins=False, add_line=True, c='black', label=None):
     ratio, bin_centers = calc_median_ratio(x, y_int, y_iso, bins, x_min, x_max, log_bins)
     
     ax.plot(bin_centers, ratio, label = label, c = c)
