@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.stats import binned_statistic
+import os
 
 #------------GENERAL FUNCTIONS-------------
 
@@ -37,6 +38,14 @@ def add_run(simulation, snapshot, run):
         simulation[snapshot][run] = {}
     path = f'/cosma8/data/do019/dc-vanz1/GalaxyProperties/{simulation['dimension']}/{simulation['simulation']}/{snapshot}/{run}/'
     add_sample(simulation[snapshot][run], path)
+
+# Loads in all available snapshots of a list of runs for one simulational volume
+def add_all_runs(simulation, runs):
+    snapshots = os.listdir(f'/cosma8/data/do019/dc-vanz1/GalaxyProperties/{simulation['dimension']}/{simulation['simulation']}/')
+    print('Available snapshots:', sorted(snapshots))
+    for snapshot in snapshots:
+        for run in runs:
+            add_run(simulation, snapshot, run)
 
 
 #------------COMBINING SNAPSHOTS-------------
@@ -98,7 +107,7 @@ def plot_counts(ax, x, bins, x_min, x_max, log_bins = False, c='black', label=No
     ax.set_xlim(x_min, x_max)
 
 # Calculates the binned mean of property y, along with its bootstrapping error and bin centers as a function of x
-def calc_mean(x, y, bins, x_min, x_max, log_bins=False, N=1000):
+def calc_mean(x, y, bins, x_min, x_max, log_bins=False, N=100):
     bin_edges, bin_centers = set_bins(bins, x_min, x_max, log_bins)
     
     mean, _, indices = binned_statistic(x=x, values=y, statistic = 'mean', bins=bin_edges)
@@ -126,8 +135,8 @@ def plot_mean(ax, x, y, bins, x_min, x_max, log_bins=False, N=100, c='black', la
 def calc_mean_ratio(x, y_int, y_iso, bins, x_min, x_max, log_bins=False, N=100):
     bin_edges, bin_centers = set_bins(bins, x_min, x_max, log_bins)
 
-    mean_int, _, indices = binned_statistic(x=x, values=y_int, statistic = 'mean', bins=bin_edges)
-    mean_iso, _, _ = binned_statistic(x=x, values=y_iso, statistic = 'mean', bins=bin_edges)
+    mean_int, _, indices = binned_statistic(x=x, values=y_int, statistic = lambda x: np.nanmean(x), bins=bin_edges)
+    mean_iso, _, _ = binned_statistic(x=x, values=y_iso, statistic = lambda x: np.nanmean(x), bins=bin_edges)
     ratio = mean_int / mean_iso
     
     bootstrapping_error = []
