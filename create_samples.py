@@ -4,12 +4,15 @@ import time
 import unyt
 import os
 import sys
+from astropy.cosmology import FlatLambdaCDM
 
 epsilon_r = 0.1                 # Radiative efficiency
 c = 3e10                        # Speed of light to cm/s
 Msun = 1.988e33                 # Solar mass to grams
 yr = 365.25*24*3600             # year to seconds
 Ledd = 1.26e38                  # Eddington luminosity per Msun (erg/s)
+
+cosmo = FlatLambdaCDM(H0=100*0.681, Om0=.306, Ob0=0.0486)        # Cosmology used in COLIBRE
 
 # Calculates the black hole luminosity, based on the black hole accretion rate
 def bh_luminosity(bhar):
@@ -152,17 +155,17 @@ class Analyse:
             self.ssfr[index] = ssfr[i]
         print(f'sSFR half mass calculation: {time.time()-time0:.1f} s')
 
-        fiber_angular_radius = (3*unyt.arcsec).to('rad').value / 2
-        delta_t = (self.data.metadata.cosmology.age(0) - self.data.metadata.cosmology.age(self.z)).value*unyt.Gyr
-        distance = (delta_t * unyt.c).to('kpc')
-        fiber_aperture = (fiber_angular_radius * distance).value
-        if fiber_aperture < radii[0]:
-            print('aperture < 3 kpc', fiber_aperture)
+        comoving_distance = cosmo.comoving_distance(self.z).value
+        angular_diameter_distance = comoving_distance / (1 + self.z)
+        fiber_size = (3*unyt.arcsec).to('rad').value
+        self.fiber_aperture = angular_diameter_distance * fiber_size * 1000
+        if self.fiber_aperture < radii[0]:
+            print('aperture < 3 kpc')
             ssfr_fiber = ssfrs[0]
         else:
             for j in range(len(radii)-1):
-                if fiber_aperture < radii[j+1]:
-                    x = (fiber_aperture - radii[j]) / (radii[j+1] - radii[j])
+                if self.fiber_aperture < radii[j+1]:
+                    x = (self.fiber_aperture - radii[j]) / (radii[j+1] - radii[j])
                     sfr_fiber = 10**(x*np.log10(sfrs[j+1])+(1-x)*np.log10(sfrs[j]))
                     smass_fiber = 10**(x*np.log10(smasses[j+1])+(1-x)*np.log10(smasses[j]))
                     ssfr_fiber = sfr_fiber/smass_fiber*1e9
@@ -272,6 +275,7 @@ class Analyse:
             'mass_ratio': self.smass[sample] / self.smass[self.interacting_indices[sample]],
             'boxsize': self.boxsize,
             'redshift': self.z,
+            'fiber_aperture': self.fiber_aperture,
             'ssfr1': self.ssfr1[sample],
             'ssfr3': self.ssfr3[sample],
             'ssfr10': self.ssfr10[sample],
