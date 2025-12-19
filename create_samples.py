@@ -297,14 +297,20 @@ class Analyse:
 def add_univ(snapshot, size, resolution, masses=[10, 12], sfr=0, ssfr=0):
     size = str(size)
     simulation = 'L'+size+resolution
-    tag = 's'+str(ssfr)
+    home = '/cosma/home/do019/dc-vanz1/'
+    npy_file = f'{home}GalaxyPairs/3D{cutoff_min_smass}/L{size}{resolution}/{snapshot}.npy'
+    hdf5_file = home+'hdf5_links/L'+size+resolution+'/halo_properties_'+snapshot+'.hdf5'
+    if ssfr == 'sf':
+        tag = 'sf'
+        dictionary = np.load(npy_file, allow_pickle=True).item()
+        z = dictionary['Redshift']
+        ssfr = 0.2 / cosmo.age(z).value
+    else:
+        tag = 's'+str(ssfr)
     if masses != [10, 12]:
         tag += '_'+str(masses[0])+str(masses[1])
     if sfr != 0:
         tag +=f'_sfr{sfr}'
-    home = '/cosma/home/do019/dc-vanz1/'
-    npy_file = f'{home}GalaxyPairs/3D{cutoff_min_smass}/L{size}{resolution}/{snapshot}.npy'
-    hdf5_file = home+'hdf5_links/L'+size+resolution+'/halo_properties_'+snapshot+'.hdf5'
     univs[simulation+'_'+snapshot] = Analyse(
         hdf5_file, npy_file, simulation, snapshot, tag, mass_cutoff = masses, sfr_thresholds = [sfr, ssfr]
     )
@@ -319,6 +325,8 @@ if __name__ == '__main__':
     
     add_univ(snapshot, boxsize, resolution)
     add_univ(snapshot, boxsize, resolution, ssfr=0.01)
+    add_univ(snapshot, boxsize, resolution, ssfr='sf')
     if cutoff_min_smass == '8':
         add_univ(snapshot, boxsize, resolution, masses=[8, 12])
         add_univ(snapshot, boxsize, resolution, ssfr=0.01, masses=[8, 12])
+        add_univ(snapshot, boxsize, resolution, ssfr='sf', masses=[8, 12])
