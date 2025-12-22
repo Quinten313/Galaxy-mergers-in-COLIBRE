@@ -5,6 +5,7 @@ import unyt
 import os
 import sys
 from astropy.cosmology import FlatLambdaCDM
+from multiprocessing import Pool
 
 epsilon_r = 0.1                 # Radiative efficiency
 c = 3e10                        # Speed of light to cm/s
@@ -110,7 +111,7 @@ class Analyse:
         self.interacting_indices = interacting_indices.astype(int)
         self.N2 = N2.astype(int)
 
-    def ssfr_half_mass_radius(self):          
+    def ssfr_half_mass_radius(self):
         time0 = time.time()
 
         half_mass_radius = self.stellar_half_mass_radius.to('kpc')[self.indices].value
@@ -200,22 +201,30 @@ class Analyse:
         print('Host galaxies:', len(self.interacting_local))
         print('Control group candidates:', np.sum(self.mask_iso))
 
-    @staticmethod
-    def weight(y, y0, tolerance):
-        return 1 - np.abs(y-y0) / tolerance
+    # Nested class that can be used for multiprocessing as it contains no hdf5 data
+    class PickleableArrays:
 
-    def weights(self, index_interacting, mask_isolated, x):
-        w1 = self.__class__.weight(np.log10(self.smass[self.indices[index_interacting]]), np.log10(self.smass[self.indices[mask_isolated]]), x/2)
-        w2 = self.__class__.weight(self.N2_local[index_interacting], self.N2_local[mask_isolated], x*self.N2_local[index_interacting])
-        w3 = self.__class__.weight(
-            self.distanceNN[index_interacting, 1], self.distanceNN[mask_isolated, 0], x*self.distanceNN[index_interacting, 1]
-        )
-        return w1*w2*w3
+        def __init__(self, outer):
+            self.smass = np.array(outer.smass)
+            self.indices = outer.indices
+            self.N2_local = outer.N2_local
+            self.distanceNN = outer.distanceNN
+            self.mask_iso = outer.mask_iso
+            self.interacting_indices_local = outer.interacting_indices_local
 
-    def isolated_sample(self):
-        time0 = time.time()
-        no_match, isolated, tolerance = [], [], []
-        for i in self.interacting_local:
+        @staticmethod
+        def weight(y, y0, tolerance):
+            return 1 - np.abs(y-y0) / tolerance
+    
+        def weights(self, index_interacting, mask_isolated, x):
+            w1 = self.__class__.weight(np.log10(self.smass[self.indices[index_interacting]]), np.log10(self.smass[self.indices[mask_isolated]]), x/2)
+            w2 = self.__class__.weight(self.N2_local[index_interacting], self.N2_local[mask_isolated], x*self.N2_local[index_interacting])
+            w3 = self.__class__.weight(
+                self.distanceNN[index_interacting, 1], self.distanceNN[mask_isolated, 0], x*self.distanceNN[index_interacting, 1]
+            )
+            return w1*w2*w3
+
+        def find_isolated_galaxy(self, i):
             x = 0.1
             while True:
                 mask1 = (10**(-x/2)*self.smass[self.indices[i]] < self.smass[self.indices]) & \
@@ -230,20 +239,28 @@ class Analyse:
                 if np.sum(mask) >= 1:
                     candidates = self.indices[mask]
                     weight = self.weights(i, mask, x)
-                    isolated.append(candidates[np.argmax(weight)])
-                    tolerance.append(x)
-                    break
+                    isolated = candidates[np.argmax(weight)]
+                    tolerance = x
+                    return isolated, tolerance, 1
                 else:
-                    if x == .2:
-                        no_match.append(i)
-                        break
+                    if x > .19:
+                        return 0, 0, 0
                     x += .05
 
-        mask_match = ~np.isin(self.interacting_local, no_match)
-        interacting_matched = self.interacting_local[mask_match]
+    def isolated_sample(self):
+        time0 = time.time()
+        inner = self.PickleableArrays(self)
+        attrs = inner.__dict__.keys()
+        if __name__ == '__main__':
+            with Pool(processes=n_jobs) as pool:
+                isolated, tolerance, match_found = zip(*pool.map(inner.find_isolated_galaxy, self.interacting_local))
+        isolated = np.array(isolated)
+        tolerance = np.array(tolerance)
+        match_found = np.array(match_found, dtype=bool)
+        interacting_matched = self.interacting_local[match_found]
         self.interacting = self.indices[interacting_matched]
-        self.isolated = isolated
-        self.tolerance = tolerance
+        self.isolated = isolated[match_found]
+        self.tolerance = tolerance[match_found]
         print('Matched pairs:', len(self.interacting))
         print(f'{time.time()-time0:.1f} s')
 
@@ -322,6 +339,7 @@ if __name__ == '__main__':
     boxsize = sys.argv[2]
     resolution = sys.argv[3]
     cutoff_min_smass = sys.argv[4]
+    n_jobs = int(sys.argv[5])
     
     add_univ(snapshot, boxsize, resolution)
     add_univ(snapshot, boxsize, resolution, ssfr=0.01)
