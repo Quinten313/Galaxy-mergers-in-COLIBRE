@@ -130,6 +130,8 @@ def plot_mean(ax, x, y, bins, x_min, x_max, log_bins=False, N=100, c='black', la
     ax.plot(bin_centers, mean, label = label, c = c)
     ax.fill_between(bin_centers, mean-err, mean+err, alpha = .3, color = c)
     ax.set_xlim(x_min, x_max)
+    if log_bins:
+        ax.set(xlim=[10**x_min, 10**x_max], xscale='log')
 
 # Calculates the ratio of 2 binned means of property y, along with its bootstrapping error and bin centers as a function of x
 def calc_mean_ratio(x, y_int, y_iso, bins, x_min, x_max, log_bins=False, N=100):
@@ -164,6 +166,8 @@ def plot_mean_ratio(ax, x, y_int, y_iso, bins, x_min, x_max, log_bins=False, N=1
     if show_error:
         ax.fill_between(bin_centers, ratio-err_ratio, ratio+err_ratio, alpha = .3, color = c)
     ax.set_xlim(x_min, x_max)
+    if log_bins:
+        ax.set(xlim=[10**x_min, 10**x_max], xscale='log')
 
 # Calculates the binned median of property y, along with its percentiles and bin centers as a function of x
 def calc_median(x, y, bins, x_min, x_max, log_bins=False):
@@ -183,7 +187,7 @@ def plot_median(ax, x, y, bins, x_min, x_max, log_bins=False, c='black', label=N
     ax.fill_between(bin_centers, percentile16, percentile84, alpha = .3, color = c)
     ax.set_xlim(x_min, x_max)
     if log_bins:
-        ax.set_xlim(10**x_min, 10**x_max)
+        ax.set(xlim=[10**x_min, 10**x_max], xscale='log')
 
 # Calculates the ratio of 2 binned medians of property y, along with the bin centers as a function of x
 def calc_median_ratio(x, y_int, y_iso, bins, x_min, x_max, log_bins):
@@ -202,3 +206,5 @@ def plot_median_ratio(ax, x, y_int, y_iso, bins, x_min, x_max, log_bins=False, a
     if add_line:
         ax.axhline(1, color='grey', linestyle='--', label='No enhancement', alpha = .7)
     ax.set_xlim(x_min, x_max)
+    if log_bins:
+        ax.set(xlim=[10**x_min, 10**x_max], xscale='log')
