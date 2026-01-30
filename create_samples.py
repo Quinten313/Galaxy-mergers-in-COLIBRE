@@ -81,7 +81,7 @@ class Analyse:
         self.ssfr3 = (self.sfr3 / self.smass3).to('1/Gyr')
         self.ssfr10 = (self.sfr10 / self.smass10).to('1/Gyr')
         self.ssfr30 = (self.sfr30 / self.smass30).to('1/Gyr')
-        self.ssfr50 = (self.sfr / self.smass).to('1/Gyr')
+        self.ssfr = (self.sfr / self.smass).to('1/Gyr')
 
         self.gmass = self.data.exclusive_sphere_50kpc.gas_mass.to('Msun')
         self.halo_centers = self.data.input_halos.halo_centre.to_physical()
@@ -116,7 +116,7 @@ class Analyse:
 
         half_mass_radius = self.stellar_half_mass_radius.to('kpc')[self.indices].value
 
-        ssfrs = [self.ssfr3[self.indices], self.ssfr10[self.indices], self.ssfr30[self.indices], self.ssfr50[self.indices]]
+        ssfrs = [self.ssfr3[self.indices], self.ssfr10[self.indices], self.ssfr30[self.indices], self.ssfr[self.indices]]
         smasses = [self.smass3[self.indices], self.smass10[self.indices], self.smass30[self.indices], self.smass[self.indices]]
         sfrs = [self.sfr3[self.indices], self.sfr10[self.indices], self.sfr30[self.indices], self.sfr[self.indices]]
         radii = [3,10,30,50]
@@ -151,9 +151,9 @@ class Analyse:
                 else:
                     raise Exception()
 
-        self.ssfr = np.zeros(len(self.smass))
+        self.ssfr_shmr = np.zeros(len(self.smass))
         for i, index in enumerate(self.indices):
-            self.ssfr[index] = ssfr[i]
+            self.ssfr_shmr[index] = ssfr[i]
         print(f'sSFR half mass calculation: {time.time()-time0:.1f} s')
 
         comoving_distance = cosmo.comoving_distance(self.z).value
@@ -277,7 +277,7 @@ class Analyse:
             'gmass': self.gmass[sample],
             'halo_centers': self.halo_centers[sample],
             'sfr': self.sfr[sample],
-            'ssfr': self.ssfr[sample],
+            'ssfr_shmr': self.ssfr_shmr[sample],
             'ssfr_fiber': self.ssfr_fiber[sample],
             'hmass': self.hmass[sample],
             'is_central': self.is_central[sample],
@@ -297,7 +297,7 @@ class Analyse:
             'ssfr3': self.ssfr3[sample],
             'ssfr10': self.ssfr10[sample],
             'ssfr30': self.ssfr30[sample],
-            'ssfr50': self.ssfr50[sample],
+            'ssfr': self.ssfr[sample],
             'ssfr1p': (self.data.projected_aperture_1kpc_projx.star_formation_rate[sample] / self.data.projected_aperture_1kpc_projx.stellar_mass[sample]).to('1/Gyr'),
             'ssfr3p': (self.data.projected_aperture_3kpc_projx.star_formation_rate[sample] / self.data.projected_aperture_3kpc_projx.stellar_mass[sample]).to('1/Gyr'),
             'ssfr10p': (self.data.projected_aperture_10kpc_projx.star_formation_rate[sample] / self.data.projected_aperture_10kpc_projx.stellar_mass[sample]).to('1/Gyr'),
