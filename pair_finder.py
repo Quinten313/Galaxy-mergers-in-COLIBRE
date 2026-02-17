@@ -67,7 +67,12 @@ def function(i):
         #This loop locates the nearest galaxy within 10 and 100 percent of its mass
     NNs = [0, 0]
     iis = [0, 0]
-    N2 = np.sum(distances2 < 2**2)
+    N2, N1 = np.sum(distances2 < 4), np.sum(distances2 < 1)
+    N2_half = np.median(distances2[distances2 < 4])
+    if np.min(distances2) < 1:
+        N1_half = np.median(distances2[distances2 < 1])
+    else:
+        N1_half = 1
     for j in range(2):
         distances_index_local = np.argmin(distances2)
         if distances2[distances_index_local] < np.inf:
@@ -83,8 +88,7 @@ def function(i):
             NNs[0] = np.inf
         iis[1] = i
         NNs[1] = np.inf
-
-    return NNs, iis, [N2, 0]
+    return NNs, iis, [N2, N1], [N2_half, N1_half]
 
 if __name__ == '__main__':
     with Pool(processes=n_jobs) as pool:
@@ -93,8 +97,11 @@ if __name__ == '__main__':
 
 interacting_indices = np.array([results[i][1] for i in range(len(results))], dtype = int)
 interacting_indices = np.array([results[i][1] for i in range(len(results))], dtype = int)
-distanceNN = np.array(results)[:,0]**.5
+distanceNN = np.sqrt(np.array(results)[:,0])
 N2 = np.array(results)[:,2,0].astype(int)
+N1 = np.array(results)[:,2,1].astype(int)
+N2_half = np.sqrt(np.array(results)[:,3,0])
+N1_half = np.sqrt(np.array(results)[:,3,1])
 
 halo_centers_all_np = halo_centers_all.to_value()
 halo_index_map = {tuple(halo_centers_all_np[i]): i for i in range(halo_centers_all_np.shape[0])}
@@ -109,6 +116,9 @@ dictionary = {
     'DistanceNN': distanceNN,
     'Interacting_Index': indices_secondary,
     'N2': N2,
+    'N1': N1,
+    'N2_half': N2_half,
+    'N1_half': N1_half,
     'Boxsize': data.metadata.boxsize,
     'Redshift': data.metadata.redshift
 }

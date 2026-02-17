@@ -59,6 +59,9 @@ class Analyse:
         self.interacting_indices_local = dictionary['Interacting_Index']
         self.z = dictionary['Redshift']
         self.N2_local = dictionary['N2']
+        self.N1_local = dictionary['N1']
+        self.N2_half_local = dictionary['N2_half']
+        self.N1_half_local = dictionary['N1_half']
         self.boxsize = dictionary['Boxsize'][0]
         
         print(f"Boxsize: {dictionary['Boxsize'][0]}\nRedshift: " + str(round(dictionary['Redshift'], 2)))
@@ -103,13 +106,20 @@ class Analyse:
         self.r = np.zeros(len(self.smass))
         self.r2 = np.zeros(len(self.smass))
         N2 = np.zeros(len(self.smass))
+        N1 = np.zeros(len(self.smass))
+        self.N2_half = np.zeros(len(self.smass))
+        self.N1_half = np.zeros(len(self.smass))
         for i in range(len(self.indices)):
             interacting_indices[self.indices[i]] = self.interacting_indices_local[i, 0]
             self.r[self.indices[i]] = self.distanceNN[i, 0]
             self.r2[self.indices[i]] = self.distanceNN[i, 1]
             N2[self.indices[i]] = self.N2_local[i]
+            N1[self.indices[i]] = self.N1_local[i]
+            self.N2_half[self.indices[i]] = self.N2_half_local[i]
+            self.N1_half[self.indices[i]] = self.N1_half_local[i]
         self.interacting_indices = interacting_indices.astype(int)
         self.N2 = N2.astype(int)
+        self.N1 = N1.astype(int)
 
     def ssfr_half_mass_radius(self):
         time0 = time.time()
@@ -285,6 +295,9 @@ class Analyse:
             'r': self.r[sample],
             'r2': self.r2[sample],
             'N2': self.N2[sample],
+            'N1': self.N1[sample],
+            'N2_half': self.N2_half[sample],
+            'N1_half': self.N1_half[sample],
             'bh_luminosity': bh_luminosity(self.bhar[sample]),
             'sbhar': sbhar(self.bhmass[sample], self.bhar[sample]),
             'shmr': self.stellar_half_mass_radius[sample],
