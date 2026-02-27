@@ -61,17 +61,17 @@ def function(i):
     xdistances = calc_distances(data, x, halo_centers[i][0])
     ydistances = calc_distances(data, y, halo_centers[i][1])
     zdistances = calc_distances(data, z, halo_centers[i][2])
-    distances2_all = xdistances**2 + ydistances**2 + zdistances**2
-    distances2 = distances2_all[suitable_smass]
-    current_galaxy = np.argmin(distances2)
-    distances2[current_galaxy] = np.inf
-        #This loop locates the nearest galaxy within 10 and 100 percent of its mass
+    distances2_all = xdistances**2 + ydistances**2 + zdistances**2    # Squared distances to all galaxies with stellar mass greater than the secondary galaxy mass threshold
+    current_galaxy = np.argmin(distances2_all)
+    distances2_all[current_galaxy] = np.inf
+    distances2 = distances2_all[suitable_smass]                       # Squared distances to all galaxies with a stellar mass of at least 10 percent of its own stellar mass
     NNs = [0, 0]
     iis = [0, 0]
     N2, N1 = np.sum(distances2_all < 4), np.sum(distances2_all < 1)
     N05, N08 = np.sum(distances2_all < .25), np.sum(distances2_all < .64)
     N2_half_host = np.median(np.sort(distances2_all[distances2_all < 4])[1:])
     N2_half_control = np.median(distances2_all[distances2_all < 4])
+    N_distances = distances2_all[distances2_all < 4]
     if np.min(distances2_all) < 1:
         if np.sum(distances2_all < 1) > 1:
             N1_half_host = np.median(np.sort(distances2_all[distances2_all < 1])[1:])
@@ -96,24 +96,24 @@ def function(i):
             NNs[0] = np.inf
         iis[1] = i
         NNs[1] = np.inf
-    return NNs, iis, [N2, N1], [N2_half_host, N1_half_host], [N2_half_control, N1_half_control], [N05, N08]
+    return NNs, iis, N2, N1, N05, N08, N2_half_host, N1_half_host, N2_half_control, N1_half_control, N_distances
 
 if __name__ == '__main__':
     with Pool(processes=n_jobs) as pool:
         y = np.arange(0, Ngalaxies)
         results = pool.map(function, y)
 
-interacting_indices = np.array([results[i][1] for i in range(len(results))], dtype = int)
-interacting_indices = np.array([results[i][1] for i in range(len(results))], dtype = int)
-distanceNN = np.sqrt(np.array(results)[:,0])
-N2 = np.array(results)[:,2,0].astype(int)
-N1 = np.array(results)[:,2,1].astype(int)
-N2_half_host = np.sqrt(np.array(results)[:,3,0])
-N1_half_host = np.sqrt(np.array(results)[:,3,1])
-N2_half_control = np.sqrt(np.array(results)[:,4,0])
-N1_half_control = np.sqrt(np.array(results)[:,4,1])
-N05 = np.array(results)[:,5,0].astype(int)
-N08 = np.array(results)[:,5,1].astype(int)
+distanceNN = np.sqrt(np.array([r[0] for r in results]))
+interacting_indices = np.array([r[1] for r in results], dtype = int)
+N2 = np.array([r[2] for r in results]).astype(int)
+N1 = np.array([r[3] for r in results]).astype(int)
+N05 = np.array([r[4] for r in results]).astype(int)
+N08 = np.array([r[5] for r in results]).astype(int)
+N2_half_host = np.sqrt(np.array([r[6] for r in results]))
+N1_half_host = np.sqrt(np.array([r[7] for r in results]))
+N2_half_control = np.sqrt(np.array([r[8] for r in results]))
+N1_half_control = np.sqrt(np.array([r[9] for r in results]))
+N_distances = [np.sqrt(np.array(r[10])) for r in results]
 
 halo_centers_all_np = halo_centers_all.to_value()
 halo_index_map = {tuple(halo_centers_all_np[i]): i for i in range(halo_centers_all_np.shape[0])}
@@ -124,17 +124,18 @@ indices_secondary = np.array([halo_index_map[tuple(coord.to_value())] for coord 
 indices_secondary = indices_secondary.reshape(*shape)
 
 dictionary = {
-    'Indices': np.arange(0, len(mask), 1)[mask],
+    'Indices': np.arange(len(mask))[mask],
     'DistanceNN': distanceNN,
     'Interacting_Index': indices_secondary,
     'N2': N2,
     'N1': N1,
+    'N05': N05,
+    'N08': N08,
     'N2_half_host': N2_half_host,
     'N1_half_host': N1_half_host,
     'N2_half_control': N2_half_control,
     'N1_half_control': N1_half_control,
-    'N05': N05,
-    'N08': N08,
+    'N_distances': N_distances,
     'Boxsize': data.metadata.boxsize,
     'Redshift': data.metadata.redshift
 }
