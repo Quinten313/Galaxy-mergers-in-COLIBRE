@@ -28,7 +28,7 @@ def sbhar(bhmass, bhar):
 
 class Analyse:
 
-    def __init__(self, filename_simulation, filename_dictionary, simulation, snapshot, tag, mass_cutoff = [10, 12], sfr_thresholds = [0,0]):
+    def __init__(self, filename_simulation, filename_dictionary, simulation, snapshot, tag, mass_cutoff = [10, 12], sfr_thresholds = [0,0], n=2):
         try:
             for attr in univs[simulation+'_'+snapshot].__dict__:
                 setattr(self, attr, getattr(univs[simulation+'_'+snapshot], attr))
@@ -39,7 +39,13 @@ class Analyse:
             self.load_dictionary(filename_dictionary)
             self.load_data()
             self.ssfr_half_mass_radius()
-        self.path = f'/cosma8/data/do019/dc-vanz1/GalaxyProperties/3D/{simulation}/'
+        if n == 1:
+            self.path = f'/cosma8/data/do019/dc-vanz1/GalaxyProperties/3D_1/{simulation}/'
+        if n == 2:
+            self.path = f'/cosma8/data/do019/dc-vanz1/GalaxyProperties/3D/{simulation}/'
+        if n == 8:
+            self.path = f'/cosma8/data/do019/dc-vanz1/GalaxyProperties/3D_08/{simulation}/'
+        self.n = n
         self.snapshot = snapshot
         self.tag = tag
         self.mass_cutoff = mass_cutoff
@@ -60,8 +66,12 @@ class Analyse:
         self.z = dictionary['Redshift']
         self.N2_local = dictionary['N2']
         self.N1_local = dictionary['N1']
-        self.N2_half_local = dictionary['N2_half']
-        self.N1_half_local = dictionary['N1_half']
+        self.N2_half_host_local = dictionary['N2_half_host']
+        self.N1_half_host_local = dictionary['N1_half_host']
+        self.N2_half_control_local = dictionary['N2_half_control']
+        self.N1_half_control_local = dictionary['N1_half_control']
+        self.N05_local = dictionary['N05']
+        self.N08_local = dictionary['N08']
         self.boxsize = dictionary['Boxsize'][0]
         
         print(f"Boxsize: {dictionary['Boxsize'][0]}\nRedshift: " + str(round(dictionary['Redshift'], 2)))
@@ -107,19 +117,29 @@ class Analyse:
         self.r2 = np.zeros(len(self.smass))
         N2 = np.zeros(len(self.smass))
         N1 = np.zeros(len(self.smass))
-        self.N2_half = np.zeros(len(self.smass))
-        self.N1_half = np.zeros(len(self.smass))
+        N05 = np.zeros(len(self.smass))
+        N08 = np.zeros(len(self.smass))
+        self.N2_half_host = np.zeros(len(self.smass))
+        self.N1_half_host = np.zeros(len(self.smass))
+        self.N2_half_control = np.zeros(len(self.smass))
+        self.N1_half_control = np.zeros(len(self.smass))
         for i in range(len(self.indices)):
             interacting_indices[self.indices[i]] = self.interacting_indices_local[i, 0]
             self.r[self.indices[i]] = self.distanceNN[i, 0]
             self.r2[self.indices[i]] = self.distanceNN[i, 1]
             N2[self.indices[i]] = self.N2_local[i]
             N1[self.indices[i]] = self.N1_local[i]
-            self.N2_half[self.indices[i]] = self.N2_half_local[i]
-            self.N1_half[self.indices[i]] = self.N1_half_local[i]
+            N05[self.indices[i]] = self.N05_local[i]
+            N08[self.indices[i]] = self.N08_local[i]
+            self.N2_half_host[self.indices[i]] = self.N2_half_host_local[i]
+            self.N1_half_host[self.indices[i]] = self.N1_half_host_local[i]
+            self.N2_half_control[self.indices[i]] = self.N2_half_control_local[i]
+            self.N1_half_control[self.indices[i]] = self.N1_half_control_local[i]
         self.interacting_indices = interacting_indices.astype(int)
         self.N2 = N2.astype(int)
         self.N1 = N1.astype(int)
+        self.N05 = N05.astype(int)
+        self.N08 = N08.astype(int)
 
     def ssfr_half_mass_radius(self):
         time0 = time.time()
@@ -217,7 +237,12 @@ class Analyse:
         def __init__(self, outer):
             self.smass = np.array(outer.smass)
             self.indices = outer.indices
-            self.N2_local = outer.N2_local
+            if outer.n == 1:
+                self.N2_local = outer.N1_local
+            if outer.n == 2:
+                self.N2_local = outer.N2_local
+            if outer.n == 8:
+                self.N2_local = outer.N08_local
             self.distanceNN = outer.distanceNN
             self.mask_iso = outer.mask_iso
             self.interacting_indices_local = outer.interacting_indices_local
@@ -228,7 +253,7 @@ class Analyse:
     
         def weights(self, index_interacting, mask_isolated, x):
             w1 = self.__class__.weight(np.log10(self.smass[self.indices[index_interacting]]), np.log10(self.smass[self.indices[mask_isolated]]), x/2)
-            w2 = self.__class__.weight(self.N2_local[index_interacting], self.N2_local[mask_isolated], x*self.N2_local[index_interacting])
+            w2 = self.__class__.weight(self.N2_local[index_interacting], self.N2_local[mask_isolated], np.max([x*self.N2_local[index_interacting], 0.1]))
             w3 = self.__class__.weight(
                 self.distanceNN[index_interacting, 1], self.distanceNN[mask_isolated, 0], x*self.distanceNN[index_interacting, 1]
             )
@@ -239,7 +264,7 @@ class Analyse:
             while True:
                 mask1 = (10**(-x/2)*self.smass[self.indices[i]] < self.smass[self.indices]) & \
                         (10**(x/2)*self.smass[self.indices[i]] > self.smass[self.indices])
-                mask2 = ((1-x)*self.N2_local[i] < self.N2_local) & ((1+x)*self.N2_local[i] > self.N2_local)
+                mask2 = ((1-x)*self.N2_local[i] <= self.N2_local) & ((1+x)*self.N2_local[i] >= self.N2_local)
                 mask3 = ((1-x)*self.distanceNN[i,1] < self.distanceNN[:, 0]) & ((1+x)*self.distanceNN[i,1] > self.distanceNN[:, 0])
                 mask = mask1&mask2&mask3&self.mask_iso
                 mask[i] = False
@@ -296,8 +321,12 @@ class Analyse:
             'r2': self.r2[sample],
             'N2': self.N2[sample],
             'N1': self.N1[sample],
-            'N2_half': self.N2_half[sample],
-            'N1_half': self.N1_half[sample],
+            'N2_half_host': self.N2_half_host[sample],
+            'N1_half_host': self.N1_half_host[sample],
+            'N08': self.N08[sample],
+            'N05': self.N05[sample],
+            'N2_half_control': self.N2_half_control[sample],
+            'N1_half_control': self.N1_half_control[sample],
             'bh_luminosity': bh_luminosity(self.bhar[sample]),
             'sbhar': sbhar(self.bhmass[sample], self.bhar[sample]),
             'shmr': self.stellar_half_mass_radius[sample],
@@ -324,7 +353,7 @@ class Analyse:
             print('Unavailable in snipshot')
         np.savez(path2+file, **dictionary)
 
-def add_univ(snapshot, size, resolution, masses=[10, 12], sfr=0, ssfr=0):
+def add_univ(snapshot, size, resolution, masses=[10, 12], sfr=0, ssfr=0, n=2):
     size = str(size)
     simulation = 'L'+size+resolution
     home = '/cosma/home/do019/dc-vanz1/'
@@ -342,7 +371,7 @@ def add_univ(snapshot, size, resolution, masses=[10, 12], sfr=0, ssfr=0):
     if sfr != 0:
         tag +=f'_sfr{sfr}'
     univs[simulation+'_'+snapshot] = Analyse(
-        hdf5_file, npy_file, simulation, snapshot, tag, mass_cutoff = masses, sfr_thresholds = [sfr, ssfr]
+        hdf5_file, npy_file, simulation, snapshot, tag, mass_cutoff = masses, sfr_thresholds = [sfr, ssfr], n=n
     )
 
 if __name__ == '__main__':
@@ -353,11 +382,12 @@ if __name__ == '__main__':
     resolution = sys.argv[3]
     cutoff_min_smass = sys.argv[4]
     n_jobs = int(sys.argv[5])
+    n = int(sys.argv[6])
     
-    add_univ(snapshot, boxsize, resolution)
-    add_univ(snapshot, boxsize, resolution, ssfr=0.01)
-    add_univ(snapshot, boxsize, resolution, ssfr='sf')
+    add_univ(snapshot, boxsize, resolution, n=n)
+    add_univ(snapshot, boxsize, resolution, ssfr=0.01, n=n)
+    # add_univ(snapshot, boxsize, resolution, ssfr='sf', n=n)
     if cutoff_min_smass == '8':
-        add_univ(snapshot, boxsize, resolution, masses=[8, 12])
-        add_univ(snapshot, boxsize, resolution, ssfr=0.01, masses=[8, 12])
-        add_univ(snapshot, boxsize, resolution, ssfr='sf', masses=[8, 12])
+        add_univ(snapshot, boxsize, resolution, masses=[8, 12], n=n)
+        add_univ(snapshot, boxsize, resolution, ssfr=0.01, masses=[8, 12], n=n)
+        # add_univ(snapshot, boxsize, resolution, ssfr='sf', masses=[8, 12], n=n)
