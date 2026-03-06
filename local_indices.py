@@ -11,8 +11,14 @@ def snapshot_list(start, end):
     snapshot_str = [zero_padding(i) for i in snapshot_ids]
     return snapshot_str[::-1]
 
+def wrapped_distances(coord_array1, coord_array2):
+    distances_wrapped = np.abs(coord_array1 - coord_array2)
+    distances_wrapped -= 0.5 * boxsize
+    distances_wrapped = 0.5 * boxsize - np.abs(distances_wrapped)
+    return distances_wrapped
+
 def calc_separation(coord_array1, coord_array2):
-    distances_squared = np.sum((coord_array1 - coord_array2)**2, axis=1)
+    distances_squared = np.sum(wrapped_distances(coord_array1, coord_array2)**2, axis=1)
     return np.sqrt(distances_squared)
 
 def save_ssfr(snapshot):
@@ -25,17 +31,18 @@ def save_ssfr(snapshot):
     indices_isolated = np.array([index_map[x] if x in index_map else np.nan for x in trackids_main_isolated])
     indices_secondary = np.array([index_map[x] if x in index_map else np.nan for x in trackids_main_secondary])
 
-    halo_centers = np.array(data.input_halos.halo_centres.to('kpc'))
+    halo_centers = np.array(data.input_halos.halo_centre.to('kpc'))
     smass = np.array(data.exclusive_sphere_50kpc.stellar_mass.to('Msun'))
     sfr = np.array(data.exclusive_sphere_50kpc.star_formation_rate.to('Msun/yr'))
     ssfr = sfr / smass * 1e9
 
-    nonnan = ~np.isnan(indices_interacting) & ~np.isnan(indices_secondary)
+    nonnan = ~np.isnan(indices_interacting) & ~np.isnan(indices_isolated) & ~np.isnan(indices_secondary)
     separation = np.zeros(len(indices_interacting))
-    separation[nonnan] = calc_separation(halo_centers[indices_interacting], halo_centers[indices_isolated])
+    separation[nonnan] = calc_separation(halo_centers[indices_interacting], halo_centers[indices_secondary])
     separation[~nonnan] = np.nan
     np.savez(f'../personal_storage/time_evolution/{snapshot}', interacting=ssfr[indices_interacting], isolated=ssfr[indices_isolated], separation=separation, redshift=data.metadata.redshift)
 
+boxsize = 200_000 # kpc
 print('Loading data (0127)')
 data = swiftsimio.load(f'../hdf5_links/L200m6/halo_properties_0127.hdf5')
 trackids_main_all = np.array(data.input_halos_hbtplus.track_id)
