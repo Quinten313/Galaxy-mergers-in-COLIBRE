@@ -38,9 +38,16 @@ def save_ssfr(snapshot):
 
     nonnan = ~np.isnan(indices_interacting) & ~np.isnan(indices_isolated) & ~np.isnan(indices_secondary)
     separation = np.zeros(len(indices_interacting))
-    separation[nonnan] = calc_separation(halo_centers[indices_interacting], halo_centers[indices_secondary])
+    separation[nonnan] = calc_separation(halo_centers[(indices_interacting[nonnan]).astype(int)], halo_centers[(indices_secondary[nonnan]).astype(int)])
     separation[~nonnan] = np.nan
-    np.savez(f'../personal_storage/time_evolution/{snapshot}', interacting=ssfr[indices_interacting], isolated=ssfr[indices_isolated], separation=separation, redshift=data.metadata.redshift)
+
+    ssfr_interacting, ssfr_isolated = np.zeros(len(indices_interacting)), np.zeros(len(indices_interacting))
+    ssfr_interacting[nonnan] = ssfr[(indices_interacting[nonnan]).astype(int)]
+    ssfr_interacting[~nonnan] = np.nan
+    ssfr_isolated[nonnan] = ssfr[(indices_isolated[nonnan]).astype(int)]
+    ssfr_isolated[~nonnan] = np.nan
+    
+    np.savez(f'../personal_storage/time_evolution/{snapshot}', interacting=ssfr_interacting, isolated=ssfr_isolated, separation=separation, redshift=data.metadata.redshift)
 
 boxsize = 200_000 # kpc
 print('Loading data (0127)')
@@ -60,7 +67,7 @@ secondary = np.load('../personal_storage/GalaxyProperties/3D/L200m6/0127/s0.01/S
 idx_secondary = secondary['indices']
 trackids_main_secondary = trackids_main_all[idx_secondary[r < .05]]
 
-snapshots = snapshot_list(1, 69)
+snapshots = snapshot_list(1, 20)
 for s in snapshots:
     print(f'Save sSFRs {s}')
     save_ssfr(s)
