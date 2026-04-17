@@ -22,7 +22,7 @@ n_jobs = int(sys.argv[5])
 
 home = '/cosma/home/do019/dc-vanz1/'
 filename_data = home+'hdf5_links/L'+size+resolution+'/halo_properties_'+snapshot+'.hdf5'
-output_file = f'{home}GalaxyPairs/3D{cutoff_min_smass}/L{size}{resolution}/{snapshot}.npy'
+output_file = f'{home}personal_storage/GalaxyPairs/3D{cutoff_min_smass}/L{size}{resolution}/{snapshot}.npy'
 
 data = swiftsimio.load(filename_data)
 print(f'z = {data.metadata.redshift:.2f}')
@@ -71,7 +71,7 @@ def function(i):
     N05, N08 = np.sum(distances2_all < .25), np.sum(distances2_all < .64)
     N2_half_host = np.median(np.sort(distances2_all[distances2_all < 4])[1:])
     N2_half_control = np.median(distances2_all[distances2_all < 4])
-    N_distances = distances2_all[distances2_all < 4]
+    N_distances = distances2_all[distances2_all < 25]
     if np.min(distances2_all) < 1:
         if np.sum(distances2_all < 1) > 1:
             N1_half_host = np.median(np.sort(distances2_all[distances2_all < 1])[1:])
