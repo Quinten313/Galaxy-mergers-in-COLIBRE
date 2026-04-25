@@ -11,19 +11,20 @@ def snapshot_list(start, end):
     snapshot_str = [zero_padding(i) for i in snapshot_ids]
     return snapshot_str[::-1]
 
-def wrapped_distances(coord_array1, coord_array2):
+def wrapped_distances(boxsize, coord_array1, coord_array2):
     distances_wrapped = np.abs(coord_array1 - coord_array2)
     distances_wrapped -= 0.5 * boxsize
     distances_wrapped = 0.5 * boxsize - np.abs(distances_wrapped)
     return distances_wrapped
 
-def calc_separation(coord_array1, coord_array2):
-    distances_squared = np.sum(wrapped_distances(coord_array1, coord_array2)**2, axis=1)
+def calc_separation(boxsize, coord_array1, coord_array2):
+    distances_squared = np.sum(wrapped_distances(boxsize, coord_array1, coord_array2)**2, axis=1)
     return np.sqrt(distances_squared)
 
 def save_ssfr(snapshot):
     data = swiftsimio.load(f'../hdf5_links/L200m6/halo_properties_{snapshot}.hdf5')
     trackids_new_all = np.array(data.input_halos_hbtplus.track_id)
+    boxsize = data.metadata.boxsize.to_physical()[0].to('kpc').value
 
     index_map = {v: i for i, v in enumerate(trackids_new_all)}
     
@@ -31,14 +32,15 @@ def save_ssfr(snapshot):
     indices_isolated = np.array([index_map[x] if x in index_map else np.nan for x in trackids_main_isolated])
     indices_secondary = np.array([index_map[x] if x in index_map else np.nan for x in trackids_main_secondary])
 
-    halo_centers = np.array(data.input_halos.halo_centre.to('kpc'))
+    halo_centers = np.array(data.input_halos.halo_centre.to('kpc').to_physical())
     smass = np.array(data.exclusive_sphere_50kpc.stellar_mass.to('Msun'))
-    sfr = np.array(data.exclusive_sphere_50kpc.star_formation_rate.to('Msun/yr'))
-    ssfr = sfr / smass * 1e9
+    smass10 = np.array(data.exclusive_sphere_10kpc.stellar_mass.to('Msun'))
+    sfr10 = np.array(data.exclusive_sphere_10kpc.star_formation_rate.to('Msun/yr'))
+    ssfr = sfr10 / smass10 * 1e9
 
     nonnan = ~np.isnan(indices_interacting) & ~np.isnan(indices_isolated) & ~np.isnan(indices_secondary)
     separation = np.zeros(len(indices_interacting))
-    separation[nonnan] = calc_separation(halo_centers[(indices_interacting[nonnan]).astype(int)], halo_centers[(indices_secondary[nonnan]).astype(int)])
+    separation[nonnan] = calc_separation(boxsize, halo_centers[(indices_interacting[nonnan]).astype(int)], halo_centers[(indices_secondary[nonnan]).astype(int)])
     separation[~nonnan] = np.nan
 
     ssfr_interacting, ssfr_isolated = np.zeros(len(indices_interacting)), np.zeros(len(indices_interacting))
@@ -47,9 +49,8 @@ def save_ssfr(snapshot):
     ssfr_isolated[nonnan] = ssfr[(indices_isolated[nonnan]).astype(int)]
     ssfr_isolated[~nonnan] = np.nan
     
-    np.savez(f'../personal_storage/time_evolution/{snapshot}', interacting=ssfr_interacting, isolated=ssfr_isolated, separation=separation, redshift=data.metadata.redshift)
+    np.savez(f'../personal_storage/time_evolution/{snapshot}', interacting=ssfr_interacting, isolated=ssfr_isolated, separation=separation, redshift=data.metadata.redshift, boxsize=boxsize)
 
-boxsize = 200_000 # kpc
 print('Loading data (0127)')
 data = swiftsimio.load(f'../hdf5_links/L200m6/halo_properties_0127.hdf5')
 trackids_main_all = np.array(data.input_halos_hbtplus.track_id)
@@ -67,7 +68,7 @@ secondary = np.load('../personal_storage/GalaxyProperties/3D/L200m6/0127/s0.01/S
 idx_secondary = secondary['indices']
 trackids_main_secondary = trackids_main_all[idx_secondary[r < .05]]
 
-snapshots = snapshot_list(1, 20)
+snapshots = snapshot_list(1, 127)
 for s in snapshots:
     print(f'Save sSFRs {s}')
     save_ssfr(s)
