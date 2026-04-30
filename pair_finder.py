@@ -9,9 +9,10 @@ from functools import partial
 import sys
 
 def calc_distances(data, coordinates, coord):
+    boxsize = data.metadata.boxsize.to_physical()[0]
     distances_wrapped = np.abs(coordinates - coord)
-    distances_wrapped -= 0.5 * data.metadata.boxsize[0]
-    distances_wrapped = 0.5 * data.metadata.boxsize[0] - np.abs(distances_wrapped)
+    distances_wrapped -= 0.5 * boxsize
+    distances_wrapped = 0.5 * boxsize - np.abs(distances_wrapped)
     return distances_wrapped
 
 snapshot = sys.argv[1]                # snapshot id, e.g. '0127'
@@ -19,6 +20,10 @@ size = sys.argv[2]                    # Boxsize [Mpc]
 resolution = sys.argv[3]              # 'm7', 'm6' or 'm5'
 cutoff_min_smass = int(sys.argv[4])
 n_jobs = int(sys.argv[5])
+if len(sys.argv) > 6:
+    order = int(sys.argv[6])
+else:
+    order = 1                         # Maximum order of magnitude difference between hosts and closest companions. Order=1 means M_cc / M_host > 0.1, oder=2 means M_cc / M_host > 0.01, etc.
 
 home = '/cosma/home/do019/dc-vanz1/'
 filename_data = home+'hdf5_links/L'+size+resolution+'/halo_properties_'+snapshot+'.hdf5'
@@ -33,7 +38,7 @@ print('max smass:', np.log10(np.max(stellar_mass_all)))
 
 mask = stellar_mass_all > 10**cutoff_min_smass
 
-cutoff_secondary = cutoff_min_smass - 1
+cutoff_secondary = cutoff_min_smass - order
 mask_secondary = stellar_mass_all > 10**cutoff_secondary
 
 halo_centers_all = data.input_halos.halo_centre.to_physical()
@@ -56,7 +61,7 @@ x, y, z = np.transpose(halo_centers_secondary)  #coordinates of possible seconda
 def function(i):
     if i%1000 == 0:
         print(f'{i}/{Ngalaxies} -- {100*i/Ngalaxies:.1f} %')
-    suitable_smass = smass_secondary > 0.1*smass[i]
+    suitable_smass = smass_secondary > smass[i]*0.1**order
     x, y, z = np.transpose(halo_centers_secondary)  #coordinates of possible secondary galaxies
     xdistances = calc_distances(data, x, halo_centers[i][0])
     ydistances = calc_distances(data, y, halo_centers[i][1])
@@ -67,20 +72,14 @@ def function(i):
     distances2 = distances2_all[suitable_smass]                       # Squared distances to all galaxies with a stellar mass of at least 10 percent of its own stellar mass
     NNs = [0, 0]
     iis = [0, 0]
-    N2, N1 = np.sum(distances2_all < 4), np.sum(distances2_all < 1)
-    N05, N08 = np.sum(distances2_all < .25), np.sum(distances2_all < .64)
-    N2_half_host = np.median(np.sort(distances2_all[distances2_all < 4])[1:])
-    N2_half_control = np.median(distances2_all[distances2_all < 4])
+    N2, N08 = np.sum(distances2_all < 4), np.sum(distances2_all < .64)
     N_distances = distances2_all[distances2_all < 25]
-    if np.min(distances2_all) < 1:
-        if np.sum(distances2_all < 1) > 1:
-            N1_half_host = np.median(np.sort(distances2_all[distances2_all < 1])[1:])
-        else:
-            N1_half_host = 1
-        N1_half_control = np.median(distances2_all[distances2_all < 1])
-    else:
-        N1_half_control = 1
-        N1_half_host = 1
+    if order > 1:
+        suitable_smass_massive = smass_secondary > smass[i]*0.1
+        distances2_massive = distances2_all[suitable_smass_massive]
+        distances_index_local_massive = np.argmin(distances2_massive)
+        NMN = distances2_massive[distances_index_local_massive]                                    # Nearest Massive Neighbor
+        NMN_smass = smass_secondary[suitable_smass_massive][distances_index_local_massive]         # NMN stellar mass
     for j in range(2):
         distances_index_local = np.argmin(distances2)
         if distances2[distances_index_local] < np.inf:
@@ -96,24 +95,24 @@ def function(i):
             NNs[0] = np.inf
         iis[1] = i
         NNs[1] = np.inf
-    return NNs, iis, N2, N1, N05, N08, N2_half_host, N1_half_host, N2_half_control, N1_half_control, N_distances
+    if order == 1:
+        return NNs, iis, N2, N08, N_distances
+    return NNs, iis, N2, N08, N_distances, NMN, NMN_smass
 
 if __name__ == '__main__':
     with Pool(processes=n_jobs) as pool:
         y = np.arange(0, Ngalaxies)
         results = pool.map(function, y)
 
+print(f'{Ngalaxies}/{Ngalaxies} -- 100.0 %\nSAVING GALAXY PAIRS...')
 distanceNN = np.sqrt(np.array([r[0] for r in results]))
 interacting_indices = np.array([r[1] for r in results], dtype = int)
 N2 = np.array([r[2] for r in results]).astype(int)
-N1 = np.array([r[3] for r in results]).astype(int)
-N05 = np.array([r[4] for r in results]).astype(int)
-N08 = np.array([r[5] for r in results]).astype(int)
-N2_half_host = np.sqrt(np.array([r[6] for r in results]))
-N1_half_host = np.sqrt(np.array([r[7] for r in results]))
-N2_half_control = np.sqrt(np.array([r[8] for r in results]))
-N1_half_control = np.sqrt(np.array([r[9] for r in results]))
-N_distances = [np.sqrt(np.array(r[10])) for r in results]
+N08 = np.array([r[3] for r in results]).astype(int)
+N_distances = [np.sqrt(np.array(r[4])) for r in results]
+if order > 1:
+    NMN = np.sqrt(np.array([r[5] for r in results]))
+    NMN_smass = np.array([r[6] for r in results])
 
 halo_centers_all_np = halo_centers_all.to_value()
 halo_index_map = {tuple(halo_centers_all_np[i]): i for i in range(halo_centers_all_np.shape[0])}
@@ -128,16 +127,13 @@ dictionary = {
     'DistanceNN': distanceNN,
     'Interacting_Index': indices_secondary,
     'N2': N2,
-    'N1': N1,
-    'N05': N05,
     'N08': N08,
-    'N2_half_host': N2_half_host,
-    'N1_half_host': N1_half_host,
-    'N2_half_control': N2_half_control,
-    'N1_half_control': N1_half_control,
     'N_distances': N_distances,
     'Boxsize': data.metadata.boxsize,
     'Redshift': data.metadata.redshift
 }
+if order > 1:
+    dictionary['NMN'] = NMN
+    dictionary['NMN_smass'] = NMN_smass
 
 np.save(output_file, dictionary)
